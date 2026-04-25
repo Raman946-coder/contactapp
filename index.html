@@ -29,10 +29,13 @@
 
     <div id="appSection" class="container" style="display: none;">
         <div class="section">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h2>New Contact</h2>
-                <button onclick="logout()" style="background: #fee2e2; color: #ef4444; border: none; padding: 5px 12px; border-radius: 8px; cursor: pointer; font-weight: 600;">Logout</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin-bottom: 0;">New Contact</h2>
+                <button onclick="logout()" class="icon-btn del-btn" style="flex: none; width: auto; padding: 5px 12px;">Logout</button>
             </div>
+            
+            <p id="welcomeMsg" style="font-size: 0.9rem; color: #64748b; margin-bottom: 20px; font-weight: 500;"></p>
+
             <div class="input-group">
                 <label>First Name</label>
                 <input type="text" id="firstName" placeholder="e.g. Raman">
@@ -63,20 +66,19 @@
     </div>
 
     <script>
-        const API_URL = "https://contactapp-fogb.onrender.com/api"; // Updated with /api
+        const API_URL = "https://contactapp-fogb.onrender.com/api";
         let isLoginMode = true;
         let allContacts = [];
 
-        // --- CHECK LOGIN STATUS ON LOAD ---
         window.onload = () => {
             const token = localStorage.getItem('token');
+            const username = localStorage.getItem('username');
             if (token) {
-                showApp();
+                showApp(username);
                 fetchContacts();
             }
         };
 
-        // --- AUTH LOGIC ---
         function toggleAuthMode() {
             isLoginMode = !isLoginMode;
             document.getElementById('authTitle').innerText = isLoginMode ? "Login" : "Sign Up";
@@ -101,7 +103,8 @@
                 if (response.ok) {
                     if (isLoginMode) {
                         localStorage.setItem('token', data.token);
-                        showApp();
+                        localStorage.setItem('username', data.username);
+                        showApp(data.username);
                         fetchContacts();
                     } else {
                         alert("Registration successful! Please login.");
@@ -111,28 +114,28 @@
                     alert(data.error);
                 }
             } catch (err) {
-                alert("Server error. Is the backend running?");
+                alert("Server error. Check if backend is live.");
             }
         }
 
-        function showApp() {
+        function showApp(username) {
             document.getElementById('authSection').style.display = 'none';
-            document.getElementById('appSection').style.display = 'grid';
+            document.getElementById('appSection').style.display = 'flex'; // Changed to flex for the CSS layout
+            document.getElementById('welcomeMsg').innerText = `Logged in as: ${username}`;
         }
 
         function logout() {
-            localStorage.removeItem('token');
+            localStorage.clear();
             location.reload();
         }
 
-        // --- CONTACT LOGIC (Now with Authorization Header) ---
         async function fetchContacts() {
             const token = localStorage.getItem('token');
             try {
                 const response = await fetch(API_URL + '/contacts', {
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
-                if (response.status === 403) logout(); // Session expired
+                if (response.status === 403) logout();
                 allContacts = await response.json();
                 renderContacts(allContacts);
             } catch (err) {
@@ -160,11 +163,11 @@
 
             if (response.ok) {
                 fetchContacts();
-                // Clear inputs
                 ['firstName', 'lastName', 'email', 'phone'].forEach(id => document.getElementById(id).value = '');
             }
         }
 
+        // RESTORED EDIT BUTTON HERE
         function renderContacts(list) {
             const container = document.getElementById('contactList');
             if (list.length === 0) {
@@ -179,6 +182,7 @@
                         ${c.phone_number ? `<p>📞 ${c.phone_number}</p>` : ''}
                     </div>
                     <div class="actions">
+                        <button class="icon-btn edit-btn" onclick="alert('Edit feature coming soon!')">Edit</button>
                         <button class="icon-btn del-btn" onclick="deleteContact(${c.contact_id})">Delete</button>
                     </div>
                 </div>
@@ -192,6 +196,17 @@
                 c.last_name.toLowerCase().includes(term)
             );
             renderContacts(filtered);
+        }
+
+        // Placeholder for Delete (You will need the backend route for this)
+        async function deleteContact(id) {
+            if(!confirm("Delete this contact?")) return;
+            const token = localStorage.getItem('token');
+            await fetch(`${API_URL}/contacts/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            fetchContacts();
         }
     </script>
 </body>
