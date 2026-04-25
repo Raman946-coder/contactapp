@@ -1,112 +1,139 @@
-const express = require("express");
-const mysql = require("mysql2");
-const cors = require("cors");
+const express = require('express');
+const mysql = require('mysql2/promise');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 1. CLOUD DATABASE CONNECTION (Aiven)
-// When deploying to Render, we will set these variables in the Render Dashboard.
-const db = mysql.createPool({
-  host: process.env.DB_HOST || "mysql-76ab014-rk-0cad.c.aivencloud.com",
-  port: process.env.DB_PORT || 24059,
-  user: process.env.DB_USER || "avnadmin",
-  password: process.env.DB_PASSWORD || "AVNS_EdM28o6YcS7o4WRGtjD",
-  database: process.env.DB_NAME || "defaultdb",
-  ssl: {
-    rejectUnauthorized: false // Required for Aiven/Cloud SSL connections
-  },
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
+// Secret key for signing tokens - added to Render Env Variables
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_key_123';
 
-// Test connection
-db.getConnection((err, connection) => {
-  if (err) {
-    console.error("❌ Cloud Database connection failed:", err.message);
-  } else {
-    console.log("✅ Connected to Aiven Cloud MySQL");
-    connection.release();
-  }
-});
+const dbConfig = {
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    ssl: { rejectUnauthorized: false }
+};
 
-// 2. API ROUTES (CRUD)
+// --- SECURITY MIDDLEWARE ---
+// This checks if the user is logged in before allowing contact access
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-// GET: Fetch all
-app.get("/contacts", (req, res) => {
-  const sql = `
-    SELECT c.contact_id, c.first_name, c.last_name, e.email, p.phone_number
-    FROM contacts c
-    LEFT JOIN emails e ON c.contact_id = e.contact_id
-    LEFT JOIN phone_numbers p ON c.contact_id = p.contact_id
-    ORDER BY c.contact_id DESC
-  `;
-  db.query(sql, (err, results) => {
-    if (err) return res.status(500).json(err);
-    res.json(results);
-  });
-});
+    if (!token) return res.status(401).json({ error: "Access denied. Please login." });
 
-// POST: Add new
-app.post("/add", (req, res) => {
-  const { first_name, last_name, email, phone } = req.body;
-  const sql1 = "INSERT INTO contacts (first_name, last_name) VALUES (?, ?)";
-  
-  db.query(sql1, [first_name, last_name], (err, result) => {
-    if (err) return res.status(500).json(err);
-    const contactId = result.insertId;
-    const sql2 = "INSERT INTO emails (contact_id, email) VALUES (?, ?)";
-    const sql3 = "INSERT INTO phone_numbers (contact_id, phone_number) VALUES (?, ?)";
-
-    db.query(sql2, [contactId, email || null], (err2) => {
-      db.query(sql3, [contactId, phone || null], (err3) => {
-        if (err2 || err3) return res.status(500).json({ error: "Secondary insert failed" });
-        res.send("Contact added successfully");
-      });
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ error: "Session expired. Login again." });
+        req.user = user; // This contains the user's ID from the database
+        next();
     });
-  });
+};
+
+// --- AUTH ROUTES ---
+
+// 1. Register User
+app.post('/api/register', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const connection = await mysql.createConnection(dbConfig);
+        
+        await connection.execute(
+            'INSERT INTO users (username, password) VALUES (?, ?)',
+            [username, hashedPassword]
+        );
+        res.status(201).json({ message: "User registered successfully!" });
+        await connection.end();
+    } catch (err) {
+        res.status(500).json({ error: "Username already exists or database error." });
+    }
 });
 
-// PUT: Update
-app.put("/update/:id", (req, res) => {
-  const contactId = req.params.id;
-  const { first_name, last_name, email, phone } = req.body;
-  const sql1 = "UPDATE contacts SET first_name = ?, last_name = ? WHERE contact_id = ?";
-  const sql2 = "UPDATE emails SET email = ? WHERE contact_id = ?";
-  const sql3 = "UPDATE phone_numbers SET phone_number = ? WHERE contact_id = ?";
+// 2. Login User
+app.post('/api/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        const connection = await mysql.createConnection(dbConfig);
+        
+        const [users] = await connection.execute('SELECT * FROM users WHERE username = ?', [username]);
+        if (users.length === 0) return res.status(400).json({ error: "User not found" });
 
-  db.query(sql1, [first_name, last_name, contactId], (err) => {
-    db.query(sql2, [email, contactId], (err2) => {
-      db.query(sql3, [phone, contactId], (err3) => {
-        if (err || err2 || err3) return res.status(500).json({ error: "Update failed" });
-        res.send("Update successful");
-      });
-    });
-  });
+        const isPasswordValid = await bcrypt.compare(password, users[0].password);
+        if (!isPasswordValid) return res.status(400).json({ error: "Invalid credentials" });
+
+        // Generate the Token (Valid for 2 hours)
+        const token = jwt.sign(
+            { id: users[0].id, username: users[0].username }, 
+            JWT_SECRET, 
+            { expiresIn: '2h' }
+        );
+
+        res.json({ token, username: users[0].username });
+        await connection.end();
+    } catch (err) {
+        res.status(500).json({ error: "Login failed" });
+    }
 });
 
-// DELETE
-app.delete("/delete/:id", (req, res) => {
-  const contactId = req.params.id;
-  const sqlEmail = "DELETE FROM emails WHERE contact_id = ?";
-  const sqlPhone = "DELETE FROM phone_numbers WHERE contact_id = ?";
-  const sqlContact = "DELETE FROM contacts WHERE contact_id = ?";
+// --- PROTECTED CONTACT ROUTES ---
 
-  db.query(sqlEmail, [contactId], (err) => {
-    db.query(sqlPhone, [contactId], (err2) => {
-      db.query(sqlContact, [contactId], (err3) => {
-        if (err || err2 || err3) return res.status(500).json({ error: "Delete failed" });
-        res.send("Deleted successfully");
-      });
-    });
-  });
+// Get ONLY contacts created by the logged-in user
+app.get('/api/contacts', authenticateToken, async (req, res) => {
+    try {
+        const connection = await mysql.createConnection(dbConfig);
+        const [rows] = await connection.execute(
+            `SELECT c.contact_id, c.first_name, c.last_name, e.email, p.phone_number 
+             FROM contacts c 
+             LEFT JOIN emails e ON c.contact_id = e.contact_id 
+             LEFT JOIN phone_numbers p ON c.contact_id = p.contact_id 
+             WHERE c.user_id = ? 
+             ORDER BY c.contact_id DESC`, 
+            [req.user.id]
+        );
+        res.json(rows);
+        await connection.end();
+    } catch (err) {
+        res.status(500).json({ error: "Could not fetch your contacts." });
+    }
 });
 
-// 3. START SERVER
-// The process.env.PORT is necessary for Render to assign a port automatically
+// Add contact linked to current user
+app.post('/api/contacts', authenticateToken, async (req, res) => {
+    const { first_name, last_name, email, phone_number } = req.body;
+    let connection;
+    try {
+        connection = await mysql.createConnection(dbConfig);
+        await connection.beginTransaction();
+
+        const [contactResult] = await connection.execute(
+            'INSERT INTO contacts (first_name, last_name, user_id) VALUES (?, ?, ?)',
+            [first_name, last_name, req.user.id]
+        );
+        const contactId = contactResult.insertId;
+
+        if (email) {
+            await connection.execute('INSERT INTO emails (contact_id, email) VALUES (?, ?)', [contactId, email]);
+        }
+        if (phone_number) {
+            await connection.execute('INSERT INTO phone_numbers (contact_id, phone_number) VALUES (?, ?)', [contactId, phone_number]);
+        }
+
+        await connection.commit();
+        res.json({ message: "Contact saved!", id: contactId });
+    } catch (err) {
+        if (connection) await connection.rollback();
+        res.status(500).json({ error: "Failed to save contact" });
+    } finally {
+        if (connection) await connection.end();
+    }
+});
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Secure Server running on port ${PORT}`));
