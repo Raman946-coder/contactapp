@@ -136,4 +136,41 @@ app.post('/api/contacts', authenticateToken, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+// Update a contact
+app.put('/api/contacts/:id', authenticateToken, async (req, res) => {
+    const { first_name, last_name, email, phone_number } = req.body;
+    const contactId = req.params.id;
+    let connection;
+
+    try {
+        connection = await mysql.createConnection(dbConfig);
+        await connection.beginTransaction();
+
+        // 1. Update name
+        await connection.execute(
+            'UPDATE contacts SET first_name = ?, last_name = ? WHERE contact_id = ? AND user_id = ?',
+            [first_name, last_name, contactId, req.user.id]
+        );
+
+        // 2. Update Email (Using UPSERT logic)
+        await connection.execute(
+            'INSERT INTO emails (contact_id, email) VALUES (?, ?) ON DUPLICATE KEY UPDATE email = ?',
+            [contactId, email, email]
+        );
+
+        // 3. Update Phone
+        await connection.execute(
+            'INSERT INTO phone_numbers (contact_id, phone_number) VALUES (?, ?) ON DUPLICATE KEY UPDATE phone_number = ?',
+            [contactId, phone_number, phone_number]
+        );
+
+        await connection.commit();
+        res.json({ message: "Contact updated successfully" });
+    } catch (err) {
+        if (connection) await connection.rollback();
+        res.status(500).json({ error: "Failed to update contact" });
+    } finally {
+        if (connection) await connection.end();
+    }
+});
 app.listen(PORT, () => console.log(`🚀 Secure Server running on port ${PORT}`));
