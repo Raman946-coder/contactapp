@@ -72,14 +72,22 @@ app.get('/api/contacts', authenticateToken, async (req, res) => {
     try {
         const connection = await mysql.createConnection(dbConfig);
         const [rows] = await connection.execute(`
-            SELECT c.contact_id, c.first_name, c.last_name, e.email, p.phone_number 
+            SELECT 
+                c.contact_id, 
+                c.first_name, 
+                c.last_name, 
+                MAX(e.email) as email, 
+                MAX(p.phone_number) as phone_number 
             FROM contacts c
             LEFT JOIN emails e ON c.contact_id = e.contact_id
             LEFT JOIN phone_numbers p ON c.contact_id = p.contact_id
-            WHERE c.user_id = ?`, [req.user.id]);
+            WHERE c.user_id = ?
+            GROUP BY c.contact_id`, [req.user.id]);
+            
         await connection.end();
         res.json(rows);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: "Failed to fetch contacts" });
     }
 });
