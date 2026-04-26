@@ -141,27 +141,33 @@
         }
 
         function renderContacts(list) {
-            const container = document.getElementById('contactList');
-            container.innerHTML = '';
-            if (list.length === 0) {
-                container.innerHTML = '<p class="no-contacts">No contacts found.</p>';
-                return;
-            }
-            container.innerHTML = list.map(c => `
-                <div class="contact-card">
-                    <div class="contact-info">
-                        <h3>${c.first_name} ${c.last_name}</h3>
-                        ${c.email ? `<p>📧 ${c.email}</p>` : ''}
-                        ${c.phone_number ? `<p>📞 ${c.phone_number}</p>` : ''}
-                    </div>
-                    <div class="actions">
-                        <button class="icon-btn edit-btn" onclick="startEdit(${c.contact_id})">Edit</button>
-                        <button class="icon-btn del-btn" onclick="deleteContact(${c.contact_id})">Delete</button>
-                    </div>
-                </div>
-            `).join('');
-        }
+    const container = document.getElementById('contactList');
+    
+    // 1. Wipe the UI clean
+    container.innerHTML = ''; 
 
+    if (!list || list.length === 0) {
+        container.innerHTML = '<p class="no-contacts">No contacts found.</p>';
+        return;
+    }
+
+    // 2. Build the new list
+    const html = list.map(c => `
+        <div class="contact-card">
+            <div class="contact-info">
+                <h3>${c.first_name} ${c.last_name}</h3>
+                ${c.email ? `<p>📧 ${c.email}</p>` : ''}
+                ${c.phone_number ? `<p>📞 ${c.phone_number}</p>` : ''}
+            </div>
+            <div class="actions">
+                <button class="icon-btn edit-btn" onclick="startEdit(${c.contact_id})">Edit</button>
+                <button class="icon-btn del-btn" onclick="deleteContact(${c.contact_id})">Delete</button>
+            </div>
+        </div>
+    `).join('');
+
+    container.innerHTML = html;
+}
         async function saveContact() {
             const token = localStorage.getItem('token');
             const payload = {
