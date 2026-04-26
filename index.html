@@ -142,6 +142,7 @@
 
         function renderContacts(list) {
             const container = document.getElementById('contactList');
+            container.innerHTML = '';
             if (list.length === 0) {
                 container.innerHTML = '<p class="no-contacts">No contacts found.</p>';
                 return;
