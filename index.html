@@ -34,7 +34,7 @@
                 <button onclick="logout()" class="icon-btn del-btn" style="flex: none; width: auto; padding: 5px 12px;">Logout</button>
             </div>
             
-            <p id="welcomeMsg" style="font-size: 0.9rem; color: #64748b; margin-bottom: 20px; font-weight: 500;"></p>
+            <p id="welcomeMsg" style="font-size: 0.8rem; color: #64748b; margin-bottom: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;"></p>
 
             <div class="input-group">
                 <label>First Name</label>
@@ -52,8 +52,8 @@
                 <label>Phone Number</label>
                 <input type="text" id="phone" placeholder="+91 00000 00000">
             </div>
-            <button id="addContactBtn" onclick="saveContact()">Add Contact</button>
-            <button id="cancelEditBtn" onclick="resetForm()" style="display:none; width: 100%; margin-top: 10px; background: #e2e8f0; color: #475569; border: none; padding: 10px; border-radius: 12px; cursor: pointer; font-weight: 600;">Cancel Edit</button>
+            <button id="saveBtn" onclick="saveContact()">Add Contact</button>
+            <button id="cancelEditBtn" onclick="resetForm()" style="display:none; width: 100%; margin-top: 10px; background: #f1f5f9; color: #475569; border: none; padding: 12px; border-radius: 12px; cursor: pointer; font-weight: 600;">Cancel Edit</button>
         </div>
 
         <div class="section">
@@ -68,20 +68,22 @@
 
     <script>
         const API_URL = "https://contactapp-fogb.onrender.com/api";
-        let isLoginMode = true;
         let allContacts = [];
+        let isLoginMode = true;
         let editMode = false;
         let currentEditId = null;
 
+        // CHECK SESSION ON LOAD
         window.onload = () => {
             const token = localStorage.getItem('token');
             const username = localStorage.getItem('username');
-            if (token) {
+            if (token && username) {
                 showApp(username);
                 fetchContacts();
             }
         };
 
+        // --- AUTH FUNCTIONS ---
         function toggleAuthMode() {
             isLoginMode = !isLoginMode;
             document.getElementById('authTitle').innerText = isLoginMode ? "Login" : "Sign Up";
@@ -95,42 +97,47 @@
             const password = document.getElementById('password').value;
             const endpoint = isLoginMode ? '/login' : '/register';
 
-            const response = await fetch(API_URL + endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-            const data = await response.json();
+            try {
+                const response = await fetch(API_URL + endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
 
-            if (response.ok) {
-                if (isLoginMode) {
-                    localStorage.setItem('token', data.token);
-                    localStorage.setItem('username', data.username);
-                    showApp(data.username);
-                    fetchContacts();
-                } else {
-                    alert("Registration successful! Please login.");
-                    toggleAuthMode();
-                }
-            } else { alert(data.error); }
+                if (response.ok) {
+                    if (isLoginMode) {
+                        localStorage.setItem('token', data.token);
+                        localStorage.setItem('username', data.username);
+                        showApp(data.username);
+                        fetchContacts();
+                    } else {
+                        alert("Account created! Please login.");
+                        toggleAuthMode();
+                    }
+                } else { alert(data.error); }
+            } catch (err) { alert("Server connection failed."); }
         }
 
         function showApp(username) {
             document.getElementById('authSection').style.display = 'none';
             document.getElementById('appSection').style.display = 'flex';
-            document.getElementById('welcomeMsg').innerText = `Logged in as: ${username}`;
+            document.getElementById('welcomeMsg').innerText = `USER: ${username}`;
         }
 
         function logout() { localStorage.clear(); location.reload(); }
 
+        // --- CONTACT FUNCTIONS ---
         async function fetchContacts() {
             const token = localStorage.getItem('token');
-            const response = await fetch(API_URL + '/contacts', {
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
-            if (response.status === 401 || response.status === 403) logout();
-            allContacts = await response.json();
-            renderContacts(allContacts);
+            try {
+                const response = await fetch(API_URL + '/contacts', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (response.status === 401 || response.status === 403) logout();
+                allContacts = await response.json();
+                renderContacts(allContacts);
+            } catch (err) { console.error("Fetch failed", err); }
         }
 
         function renderContacts(list) {
@@ -152,35 +159,6 @@
                     </div>
                 </div>
             `).join('');
-        }
-
-        function startEdit(id) {
-            const contact = allContacts.find(c => c.contact_id === id);
-            if (!contact) return;
-
-            document.getElementById('firstName').value = contact.first_name;
-            document.getElementById('lastName').value = contact.last_name;
-            document.getElementById('email').value = contact.email || '';
-            document.getElementById('phone').value = contact.phone_number || '';
-
-            editMode = true;
-            currentEditId = id;
-
-            document.getElementById('formTitle').innerText = "Edit Contact";
-            document.getElementById('addContactBtn').innerText = "Update Contact";
-            document.getElementById('addContactBtn').style.background = "#22c55e";
-            document.getElementById('cancelEditBtn').style.display = "block";
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
-        function resetForm() {
-            editMode = false;
-            currentEditId = null;
-            document.getElementById('formTitle').innerText = "New Contact";
-            document.getElementById('addContactBtn').innerText = "Add Contact";
-            document.getElementById('addContactBtn').style.background = "#6366f1";
-            document.getElementById('cancelEditBtn').style.display = "none";
-            ['firstName', 'lastName', 'email', 'phone'].forEach(id => document.getElementById(id).value = '');
         }
 
         async function saveContact() {
@@ -207,19 +185,47 @@
             if (response.ok) {
                 resetForm();
                 fetchContacts();
-            } else {
-                alert("Error saving contact");
-            }
+            } else { alert("Error saving contact."); }
+        }
+
+        function startEdit(id) {
+            const contact = allContacts.find(c => c.contact_id === id);
+            if (!contact) return;
+
+            document.getElementById('firstName').value = contact.first_name;
+            document.getElementById('lastName').value = contact.last_name;
+            document.getElementById('email').value = contact.email || '';
+            document.getElementById('phone').value = contact.phone_number || '';
+
+            editMode = true;
+            currentEditId = id;
+
+            document.getElementById('formTitle').innerText = "Edit Contact";
+            document.getElementById('saveBtn').innerText = "Update Contact";
+            document.getElementById('saveBtn').style.background = "#22c55e"; // Green for update
+            document.getElementById('cancelEditBtn').style.display = "block";
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetForm() {
+            editMode = false;
+            currentEditId = null;
+            document.getElementById('formTitle').innerText = "New Contact";
+            document.getElementById('saveBtn').innerText = "Add Contact";
+            document.getElementById('saveBtn').style.background = "#6366f1";
+            document.getElementById('cancelEditBtn').style.display = "none";
+            ['firstName', 'lastName', 'email', 'phone'].forEach(id => document.getElementById(id).value = '');
         }
 
         async function deleteContact(id) {
-            if(!confirm("Delete this contact?")) return;
+            if(!confirm("Delete this contact permanently?")) return;
             const token = localStorage.getItem('token');
             const response = await fetch(`${API_URL}/contacts/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': 'Bearer ' + token }
             });
             if (response.ok) fetchContacts();
+            else alert("Delete failed.");
         }
 
         function filterContacts() {
