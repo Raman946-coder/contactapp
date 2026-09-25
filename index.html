@@ -8,8 +8,10 @@
 </head>
 <body>
 
-    <div id="authSection" class="container" style="display: flex; justify-content: center; align-items: center; min-height: 80vh;">
-        <div class="section" style="max-width: 400px; width: 100%;">
+    <div id="authSection" class="container auth-shell" style="display: flex; justify-content: center; align-items: center; min-height: 80vh;">
+        <div class="section auth-card" style="max-width: 400px; width: 100%;">
+            <div class="brand-mark" aria-hidden="true">SC</div>
+            <p class="eyebrow">Private contact workspace</p>
             <h2 id="authTitle">Login</h2>
             <div class="input-group">
                 <label>Username</label>
@@ -29,7 +31,7 @@
 
     <div id="appSection" class="container" style="display: none;">
         <div class="section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2 id="formTitle">New Contact</h2>
                 <button onclick="logout()" class="icon-btn del-btn" style="flex: none; width: auto; padding: 5px 12px;">Logout</button>
             </div>
@@ -57,7 +59,13 @@
         </div>
 
         <div class="section">
-            <h2>Directory</h2>
+            <div class="directory-heading">
+                <div>
+                    <p class="eyebrow">Your people</p>
+                    <h2>Directory</h2>
+                </div>
+                <span class="directory-status">Contacts</span>
+            </div>
             <div class="search-container">
                 <input type="text" id="searchBox" class="search-box" placeholder="Search names..." oninput="filterContacts()">
             </div>
