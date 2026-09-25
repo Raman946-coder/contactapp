@@ -1,0 +1,179 @@
+:root {
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --bg: #f8fafc;
+  --card-bg: #ffffff;
+  --text-main: #1e293b;
+  --text-sub: #64748b;
+  --danger: #ef4444;
+  --border: #e2e8f0;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text-main);
+  padding: 20px;
+  min-height: 100vh;
+}
+
+/* --- Layout Container: Mobile First --- */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column; /* Stacks sections on mobile */
+  gap: 25px;
+}
+
+/* --- Desktop Layout: Two Columns --- */
+@media (min-width: 850px) {
+  .container {
+    flex-direction: row; /* Side-by-side on desktop */
+    align-items: flex-start;
+  }
+
+  /* Left Column (Form) */
+  #appSection > .section:first-child {
+    flex: 1; 
+    position: sticky;
+    top: 20px;
+  }
+
+  /* Right Column (Directory) */
+  #appSection > .section:last-child {
+    flex: 1.6;
+  }
+}
+
+/* --- Section Styling --- */
+.section {
+  background: var(--card-bg);
+  padding: 25px;
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  width: 100%;
+}
+
+h2 {
+  color: var(--primary);
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+/* --- Form Elements --- */
+.input-group {
+  margin-bottom: 15px;
+}
+
+label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  color: var(--text-sub);
+}
+
+input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+button#addContactBtn {
+  width: 100%;
+  padding: 14px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* --- The Auto-Aligning Contact Card --- */
+.contact-card {
+  background: #fff;
+  padding: 20px;
+  margin-bottom: 15px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column; /* Stack name and buttons on mobile */
+  gap: 15px;
+}
+
+/* Align buttons to the right only on larger mobile/desktop */
+@media (min-width: 500px) {
+  .contact-card {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
+.contact-info h3 {
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.contact-info p {
+  font-size: 0.9rem;
+  color: var(--text-sub);
+}
+
+/* --- Action Buttons (Edit/Delete) --- */
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.icon-btn {
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.1s;
+  text-align: center;
+  min-width: 80px;
+}
+
+.edit-btn {
+  background: #eef2ff;
+  color: var(--primary);
+}
+
+.del-btn {
+  background: #fee2e2;
+  color: var(--danger);
+}
+
+.icon-btn:active {
+  transform: scale(0.95);
+}
+
+/* --- Search Bar --- */
+.search-box {
+  background: #f1f5f9;
+  border: none;
+  margin-bottom: 20px;
+}

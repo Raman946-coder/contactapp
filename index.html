@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Contacts</title>
+    <link rel="stylesheet" href="design.css">
+</head>
+<body>
+
+    <div id="authSection" class="container" style="display: flex; justify-content: center; align-items: center; min-height: 80vh;">
+        <div class="section" style="max-width: 400px; width: 100%;">
+            <h2 id="authTitle">Login</h2>
+            <div class="input-group">
+                <label>Username</label>
+                <input type="text" id="username" placeholder="Enter username">
+            </div>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="Enter password">
+            </div>
+            <button id="authBtn" onclick="handleAuth()">Login</button>
+            <p style="text-align: center; margin-top: 15px; font-size: 0.9rem; color: #64748b;">
+                <span id="toggleText">Don't have an account?</span> 
+                <a href="#" onclick="toggleAuthMode()" id="toggleLink" style="color: #6366f1; font-weight: 600;">Sign Up</a>
+            </p>
+        </div>
+    </div>
+
+    <div id="appSection" class="container" style="display: none;">
+        <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 id="formTitle">New Contact</h2>
+                <button onclick="logout()" class="icon-btn del-btn" style="flex: none; width: auto; padding: 5px 12px;">Logout</button>
+            </div>
+            
+            <p id="welcomeMsg" style="font-size: 0.8rem; color: #64748b; margin-bottom: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;"></p>
+
+            <div class="input-group">
+                <label>First Name</label>
+                <input type="text" id="firstName" placeholder="e.g. Raman">
+            </div>
+            <div class="input-group">
+                <label>Last Name</label>
+                <input type="text" id="lastName" placeholder="e.g. Kumar">
+            </div>
+            <div class="input-group">
+                <label>Email Address</label>
+                <input type="email" id="email" placeholder="name@example.com">
+            </div>
+            <div class="input-group">
+                <label>Phone Number</label>
+                <input type="text" id="phone" placeholder="+91 00000 00000">
+            </div>
+            <button id="saveBtn" onclick="saveContact()">Add Contact</button>
+            <button id="cancelEditBtn" onclick="resetForm()" style="display:none; width: 100%; margin-top: 10px; background: #f1f5f9; color: #475569; border: none; padding: 12px; border-radius: 12px; cursor: pointer; font-weight: 600;">Cancel Edit</button>
+        </div>
+
+        <div class="section">
+            <h2>Directory</h2>
+            <div class="search-container">
+                <input type="text" id="searchBox" class="search-box" placeholder="Search names..." oninput="filterContacts()">
+            </div>
+            <div id="contactList">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://contactapp-fogb.onrender.com/api";
+        let allContacts = [];
+        let isLoginMode = true;
+        let editMode = false;
+        let currentEditId = null;
+
+        // CHECK SESSION ON LOAD
+        window.onload = () => {
+            const token = localStorage.getItem('token');
+            const username = localStorage.getItem('username');
+            if (token && username) {
+                showApp(username);
+                fetchContacts();
+            }
+        };
+
+        // --- AUTH FUNCTIONS ---
+        function toggleAuthMode() {
+            isLoginMode = !isLoginMode;
+            document.getElementById('authTitle').innerText = isLoginMode ? "Login" : "Sign Up";
+            document.getElementById('authBtn').innerText = isLoginMode ? "Login" : "Sign Up";
+            document.getElementById('toggleText').innerText = isLoginMode ? "Don't have an account?" : "Already have an account?";
+            document.getElementById('toggleLink').innerText = isLoginMode ? "Sign Up" : "Login";
+        }
+
+        async function handleAuth() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const endpoint = isLoginMode ? '/login' : '/register';
+
+            try {
+                const response = await fetch(API_URL + endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (isLoginMode) {
+                        localStorage.setItem('token', data.token);
+                        localStorage.setItem('username', data.username);
+                        showApp(data.username);
+                        fetchContacts();
+                    } else {
+                        alert("Account created! Please login.");
+                        toggleAuthMode();
+                    }
+                } else { alert(data.error); }
+            } catch (err) { alert("Server connection failed."); }
+        }
+
+        function showApp(username) {
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('appSection').style.display = 'flex';
+            document.getElementById('welcomeMsg').innerText = `USER: ${username}`;
+        }
+
+        function logout() { localStorage.clear(); location.reload(); }
+
+        // --- CONTACT FUNCTIONS ---
+        async function fetchContacts() {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(API_URL + '/contacts', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (response.status === 401 || response.status === 403) logout();
+                allContacts = await response.json();
+                renderContacts(allContacts);
+            } catch (err) { console.error("Fetch failed", err); }
+        }
+
+        function renderContacts(list) {
+    const container = document.getElementById('contactList');
+    
+    // 1. Wipe the UI clean
+    container.innerHTML = ''; 
+
+    if (!list || list.length === 0) {
+        container.innerHTML = '<p class="no-contacts">No contacts found.</p>';
+        return;
+    }
+
+    // 2. Build the new list
+    const html = list.map(c => `
+        <div class="contact-card">
+            <div class="contact-info">
+                <h3>${c.first_name} ${c.last_name}</h3>
+                ${c.email ? `<p>📧 ${c.email}</p>` : ''}
+                ${c.phone_number ? `<p>📞 ${c.phone_number}</p>` : ''}
+            </div>
+            <div class="actions">
+                <button class="icon-btn edit-btn" onclick="startEdit(${c.contact_id})">Edit</button>
+                <button class="icon-btn del-btn" onclick="deleteContact(${c.contact_id})">Delete</button>
+            </div>
+        </div>
+    `).join('');
+
+    container.innerHTML = html;
+}
+        async function saveContact() {
+            const token = localStorage.getItem('token');
+            const payload = {
+                first_name: document.getElementById('firstName').value,
+                last_name: document.getElementById('lastName').value,
+                email: document.getElementById('email').value,
+                phone_number: document.getElementById('phone').value
+            };
+
+            const method = editMode ? 'PUT' : 'POST';
+            const url = editMode ? `${API_URL}/contacts/${currentEditId}` : `${API_URL}/contacts`;
+
+            const response = await fetch(url, {
+                method: method,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                resetForm();
+                fetchContacts();
+            } else { alert("Error saving contact."); }
+        }
+
+        function startEdit(id) {
+            const contact = allContacts.find(c => c.contact_id === id);
+            if (!contact) return;
+
+            document.getElementById('firstName').value = contact.first_name;
+            document.getElementById('lastName').value = contact.last_name;
+            document.getElementById('email').value = contact.email || '';
+            document.getElementById('phone').value = contact.phone_number || '';
+
+            editMode = true;
+            currentEditId = id;
+
+            document.getElementById('formTitle').innerText = "Edit Contact";
+            document.getElementById('saveBtn').innerText = "Update Contact";
+            document.getElementById('saveBtn').style.background = "#22c55e"; // Green for update
+            document.getElementById('cancelEditBtn').style.display = "block";
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetForm() {
+            editMode = false;
+            currentEditId = null;
+            document.getElementById('formTitle').innerText = "New Contact";
+            document.getElementById('saveBtn').innerText = "Add Contact";
+            document.getElementById('saveBtn').style.background = "#6366f1";
+            document.getElementById('cancelEditBtn').style.display = "none";
+            ['firstName', 'lastName', 'email', 'phone'].forEach(id => document.getElementById(id).value = '');
+        }
+
+        async function deleteContact(id) {
+            if(!confirm("Delete this contact permanently?")) return;
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_URL}/contacts/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (response.ok) fetchContacts();
+            else alert("Delete failed.");
+        }
+
+        function filterContacts() {
+            const term = document.getElementById('searchBox').value.toLowerCase();
+            const filtered = allContacts.filter(c => 
+                c.first_name.toLowerCase().includes(term) || 
+                c.last_name.toLowerCase().includes(term)
+            );
+            renderContacts(filtered);
+        }
+    </script>
+</body>
+</html>
