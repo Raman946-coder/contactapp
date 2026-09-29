@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -36,14 +37,36 @@ const authenticateToken = (req, res, next) => {
 // --- AUTH ROUTES ---
 app.post('/api/register', async (req, res) => {
     const { username, password } = req.body;
+
+    if (!username || !password) {
+        return res.status(400).json({ error: "Username and password are required" });
+    }
+
+    let connection;
     try {
+        connection = await mysql.createConnection(dbConfig);
+        const [existingUsers] = await connection.execute(
+            'SELECT id, password FROM users WHERE username = ?',
+            [username]
+        );
+
+        for (const existingUser of existingUsers) {
+            const isSamePassword = await bcrypt.compare(password, existingUser.password);
+            if (isSamePassword) {
+                return res.status(409).json({
+                    error: "This username already exists with the same password. Use a different password to create a new account."
+                });
+            }
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
-        const connection = await mysql.createConnection(dbConfig);
         await connection.execute('INSERT INTO users (username, password) VALUES (?, ?)', [username, hashedPassword]);
-        await connection.end();
         res.json({ message: "User created" });
     } catch (err) {
-        res.status(500).json({ error: "Username already exists or server error" });
+        console.error(err);
+        res.status(500).json({ error: "Registration failed" });
+    } finally {
+        if (connection) await connection.end();
     }
 });
 
@@ -54,13 +77,22 @@ app.post('/api/login', async (req, res) => {
         const [users] = await connection.execute('SELECT * FROM users WHERE username = ?', [username]);
         await connection.end();
 
-        if (users.length === 0 || !(await bcrypt.compare(password, users[0].password))) {
+        let matchedUser = null;
+        for (const user of users) {
+            if (await bcrypt.compare(password, user.password)) {
+                matchedUser = user;
+                break;
+            }
+        }
+
+        if (!matchedUser) {
             return res.status(401).json({ error: "Invalid credentials" });
         }
 
-        const token = jwt.sign({ id: users[0].id, username: username }, JWT_SECRET, { expiresIn: '24h' });
+        const token = jwt.sign({ id: matchedUser.id, username: username }, JWT_SECRET, { expiresIn: '24h' });
         res.json({ token, username });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: "Login failed" });
     }
 });
@@ -173,6 +205,11 @@ app.delete('/api/contacts/:id', authenticateToken, async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: "Delete failed" });
     }
+});
+
+app.use(express.static(path.join(__dirname)));
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 const PORT = process.env.PORT || 3000;
